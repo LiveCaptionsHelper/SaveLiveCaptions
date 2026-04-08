@@ -10,7 +10,7 @@ import re
 from .transformation import word_to_number
 
 file_handle=None
-saved_captions = []  # list of (time, caption)
+saved_captions: list[tuple[float, str]] = [] # time, caption
 save_dir = ""
 
 def normalize_sentence(s: str) -> str:
@@ -53,25 +53,11 @@ def choose_save_dir():
     
     return filename
 
-async def save_txt(filename, caption):
+async def save_txt(filename):
     global saved_captions, file_handle
     if file_handle is None:
         file_handle = await aiofiles.open(filename, "a+", encoding="utf-8")
-       
-    crt_time = time.time()
     
-    if '[UPDATED]' in caption:
-        new_caption = caption.replace('[UPDATED]', '').strip()
-        # find similar, replace
-        for i, (t, saved) in enumerate(saved_captions):
-            if similarity_ratio(new_caption, saved) >= 0.85:
-                saved_captions[i] = (crt_time, new_caption)
-                break
-        else:
-            saved_captions.append((crt_time, new_caption))
-    else:
-        if not any(similarity_ratio(caption, saved) >= 0.85 for _, saved in saved_captions):
-            saved_captions.append((crt_time, caption))
     
     # write file
     async with aiofiles.open(filename, "w", encoding="utf-8") as f:
