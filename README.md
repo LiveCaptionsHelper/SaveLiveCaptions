@@ -1,7 +1,6 @@
 # Save Live Captions
 
 **Tired of losing live captions on Windows?**  This is a simple tool to save the content of live captions! 
-><img width="705" height="290" alt="screenshot" src="https://github.com/user-attachments/assets/a56e9798-c5ef-4170-a6c7-ec4185ff774a" />
 
 
 ###  Installation
