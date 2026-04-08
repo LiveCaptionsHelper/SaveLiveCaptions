@@ -1,5 +1,6 @@
 name: Build, Package, and Release
-
+permissions:
+  contents: write  
 on:
   push:
     branches: [ main ]
@@ -67,7 +68,7 @@ jobs:
       with:
         files: |
           dist/SaveLiveCaptions_SingleFile.exe
-          dist/SaveLiveCaptions_Folder.zip
+          dist/SaveLiveCaptions_Setup.exe
         tag_name: ${{ github.ref_name }}  
         name: Release ${{ github.ref_name }}
         body: |
@@ -75,7 +76,7 @@ jobs:
           ## NEW Release
           - 下载 Save Live Captions.exe 双击运行（无需安装 Python）。
           - Download the exe to run the application.
-        draft: false
+        draft: True
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # 自动授权
