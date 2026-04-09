@@ -7,7 +7,7 @@ import time
 import aiofiles
 from difflib import SequenceMatcher
 import re
-from .transformation import word_to_number
+from function.transformation import word_to_number
 
 file_handle=None
 saved_captions: list[tuple[float, str]] = [] # time, caption

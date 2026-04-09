@@ -8,11 +8,15 @@ import asyncio
 
 file_handle = None
 exit_event = asyncio.Event()
+hook_task = None
 
 async def close_all(window):
-            await asyncio.sleep(0.5)  
-            await close_file()
-            window.destroy()
+    global hook_task
+    if hook_task is not None:  
+        await hook_task
+        hook_task = None
+    await close_file()
+    window.destroy()
 
 def dashboard(loop):
     window = tk.Tk()
@@ -27,11 +31,13 @@ def dashboard(loop):
             return
     
     def start_capture():
+        global hook_task
         exit_event.clear()  
         start_btn.config(state=tk.DISABLED)
         stop_btn.config(state=tk.NORMAL)  
         filename = choose_save_dir()
-        loop.create_task(hook(filename,exit_event))  
+        hook_task = loop.create_task(hook(filename,exit_event))  
+        
 
     def stop_capture():
         exit_event.set()
