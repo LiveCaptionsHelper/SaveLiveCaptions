@@ -45,11 +45,12 @@ class Deduplicator:
 
     def is_substantial_sentence(self, s: str) -> bool:
         s = s.strip()
-        if len(s) < 5:  
+        if len(s) <= 3:  
             return False
-        # check if it is just symbols or emojis
-        if re.match(r'^[^\w\u4e00-\u9fff]*$', s):
-            return False
+        
+        # for Chinese, allow some common particles but not too short
+        if re.search(r'^[^\u4e00-\u9fff]*$', s):
+            return len(s) >= 15 or bool(re.search(r'[，。！；？.,!;?]', s))
         # filter
         words = s.lower().strip('.!?').split()
         if (len(words) <= 2 and words[0] in ['but', 'and', 'so', 'or', 'basically']) or (len(s) <= 10 and re.match(r'^(但是|而且|所以|或者|基本上|然后|接着|因此|于是|不过)', s)):
@@ -143,12 +144,10 @@ class Deduplicator:
                 pass1.append(f"{extract(best)[0]} {best_sentence}\n".strip() + '\n')
                 i = j
 
-            # === Pass 2: substantial  ===
+            # === Pass 2: subset  ===
             pass2: list[str] = []
             for idx,line in enumerate(pass1):
                 _, sentence = extract(line)
-                if not self.is_substantial_sentence(sentence):
-                    print(f"[CLEANUP-P2] Removed non-substantial: {sentence}")
                 
                 # subset judgement
                 is_subset = False

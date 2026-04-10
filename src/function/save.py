@@ -53,18 +53,36 @@ def choose_save_dir():
     
     return filename
 
-async def save_txt(filename):
-    global saved_captions, file_handle
+async def sort_captions(filename):
+    def extract_time(line):
+        match = re.match(r'\[(\d{2}:\d{2}:\d{2})\]', line)
+        if match:
+            time_str = match.group(1)
+            return time.strptime(time_str, "%H:%M:%S")
+        return None
+    with open(filename, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    lines.sort(key=extract_time)
+
+    with open(filename, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+
+
+async def save_txt(filename,new_caption: list[tuple[float, str]]):
+    ''' Add new caption '''
+
+    global file_handle
     if file_handle is None:
         file_handle = await aiofiles.open(filename, "a+", encoding="utf-8")
     
+    t, cap = new_caption
+    t_formatted = time.strftime("%H:%M:%S", time.localtime(t))
     
     # write file
-    async with aiofiles.open(filename, "w", encoding="utf-8") as f:
-        for t, cap in saved_captions:
-            t_formatted = time.strftime("%H:%M:%S", time.localtime(t))
-            await f.write(f"[{t_formatted}] {cap}\n")
-    
+    async with aiofiles.open(filename, "a", encoding="utf-8") as f:
+        await f.write(f"[{t_formatted}] {cap}\n")
+
 async def close_file():
     global file_handle
     if file_handle is not None:

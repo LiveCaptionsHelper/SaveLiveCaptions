@@ -24,32 +24,43 @@ def is_already_saved(sentence: str, threshold: float = 0.85) -> bool:
             return True
     return False
 
-def split_into_sentences(text: str):
+
+def split_into_sentences(text: str)-> list[str]:
+    if not text:
+        return []
+    
+    # handle space
+    text = re.sub(r'\s+', ' ', text).strip()
+
     # safe split, avoid splitting numbers like "3.14" or "2023.09.01" or "Ms. Menro"
-    pattern = r'([。！？.!?]+(?![0-9]))|((?<![A-Za-z0-9\w])\.(?![A-Za-z0-9]))'
-    parts = re.split(pattern, text)
+    # specialized for Chinese, the live captions usually use "，" to separate long sentences without punctuation, so we can split by "，" if the sentence is too long and contains "，"
+    chinese_punctuation = r'([，。！；？.;!?]+(?![0-9]))|((?<![A-Za-z0-9\w])\.(?![A-Za-z0-9]))'
+    # general_punctuation is for English and other language
+    general_punctuation = r'([。！？.;!?]+(?![0-9]))|((?<![A-Za-z0-9\w])\.(?![A-Za-z0-9]))'
+    
 
     sentences = []
     i = 0
     current=""
+    
 
-    while i < len(parts):
-        part = parts[i]
-        if part is None:
-            i += 1
-            continue
-            
-        # 处理捕获的标点
-        if re.match(r'^[。！？.!?]+$', str(part).strip()):
-            current += part
-            if current.strip():
+    while i < len(text):
+        current += text[i]
+        is_chinese = bool(re.search(r'[\u4e00-\u9fff]', current))
+        # -- for Chinese, split by punctuation --
+        if is_chinese:
+            if re.search(chinese_punctuation, current):
+                sentence = current.strip()
+                if deduper.is_substantial_sentence(sentence):
+                    sentences.append(sentence)
+                current = ""      
+        else:
+            # -- for non-Chinese, split by punctuation --
+            if re.search(general_punctuation, current):
                 sentence = current.strip()
                 if deduper.is_substantial_sentence(sentence):
                     sentences.append(sentence)
                 current = ""
-        else:
-            current += part
-            
         i += 1
     
     # handle last part
@@ -59,7 +70,6 @@ def split_into_sentences(text: str):
             sentences.append(sentence)
     
     return sentences
-
 
 def find_and_replace_similar(sentence: str, threshold: float = 0.85, max_time_diff: float = 3.0)-> tuple[None|int, bool]:
     """
@@ -83,12 +93,24 @@ def is_incomplete_sentence(s: str) -> bool:
     s = s.strip()
     if not s:
         return True
-    if s[-1] in '.。!?！？':
-        return False
-    # if the sentence doesn't end with punctuation, it's likely incomplete
-    if not re.search(r'[.。!?！？]', s):
+    
+    is_chinese = bool(re.search(r'[\u4e00-\u9fff]', s))
+    # --for Chinese lossely judging--
+    if is_chinese:
+        # allow '，' for Chinese, but not for non-Chinese
+        if s[-1] in ',，；;':
+            return False
+        
         return True
-    return False
+
+    #--for non-Chinese--
+    else:
+        if s[-1] in '.。!?！？':
+            return False
+        # if the sentence doesn't end with punctuation, it's likely incomplete
+        if not re.search(r'[.。!?！？]', s):
+            return True
+        return False
 
 def is_last_line_of_file(current_j: int, total_lines: int) -> bool:
     """if the sentence is in the last 3 lines of the file, consider it as important and keep it"""
@@ -120,7 +142,6 @@ def lc_detect() -> bool:
 
 async def hook(filename, exit_event):
     global last_full_text, current_sentences
-
     seen_sentences = set()  # for quick lookup of already saved sentences
 
     try:
@@ -154,11 +175,14 @@ async def hook(filename, exit_event):
             current_frame_sentences = set(sentences)
 
             new_current_sentences = {}
+            has_complete_sentence = False
             
             for sentence in current_frame_sentences:
                 # filter incomplete sentence
                 if is_incomplete_sentence(sentence):
                     continue
+
+                has_complete_sentence = True
                 similar_index, should_replace = find_and_replace_similar(sentence)
                 
                 if similar_index is not None:
@@ -170,7 +194,7 @@ async def hook(filename, exit_event):
                         print(f"[REPLACE]")
                         print(f"  OLD: {old_sentence}")
                         print(f"  NEW: {sentence}")
-                        await save_txt(filename)
+                        await save_txt(filename,save.saved_captions[similar_index])
                     continue
                 
                 if sentence in current_sentences:
@@ -183,7 +207,7 @@ async def hook(filename, exit_event):
                         print(f"[SAVE] {sentence}")
                         seen_sentences.add(sentence)
                         save.saved_captions.append((time.time(), sentence))
-                        await save_txt(filename)
+                        await save_txt(filename, save.saved_captions[-1])
                         
                         # set a limit to remove sentences peridically
                         # make same sentences which occurs after a kind of loop will be normally recorded
@@ -191,7 +215,7 @@ async def hook(filename, exit_event):
                             save.saved_captions.pop(0)  
             
             current_sentences = new_current_sentences
-            
+                       
             last_full_text = current_text
 
             await asyncio.sleep(0.25) # Adjust the sleep time as needed
@@ -203,14 +227,38 @@ async def hook(filename, exit_event):
     finally:    
         # save the last sentences when exit
         for sentence, _ in current_sentences.items():
-            if sentence in seen_sentences:
-                continue
-            else:
+            if sentence not in seen_sentences:
                 print(f"[SAVE ON EXIT] {sentence}")
                 seen_sentences.add(sentence)
                 save.saved_captions.append((time.time(), sentence))
-                await save_txt(filename)
+                await save_txt(filename,save.saved_captions[-1])
         
+        if last_full_text:
+            last_punct_match=None
+            for m in re.finditer(r'[，。！？.;!?]+', last_full_text):
+                last_two_punct_match =last_punct_match
+                last_punct_match = m
+            if last_punct_match:
+                trailing_text = last_full_text[last_punct_match.end():].strip()
+            else:
+                trailing_text = last_full_text.strip()
+            
+            second_last_text = last_full_text[last_two_punct_match.end(): last_punct_match.start()+1].strip() if last_two_punct_match else ""
+            if second_last_text and second_last_text not in seen_sentences:
+                if not any(deduper.similarity_ratio(second_last_text, s) >= SIMILARITY for s in seen_sentences):
+                    print(f"[SAVE SECOND LAST ON EXIT] {second_last_text}")
+                    seen_sentences.add(second_last_text)
+                    save.saved_captions.append((time.time(), second_last_text))
+                    await save_txt(filename,save.saved_captions[-1])
+
+            if trailing_text and trailing_text not in seen_sentences:
+                if not any(deduper.similarity_ratio(trailing_text, s) >= SIMILARITY for s in seen_sentences):
+                    print(f"[SAVE TRAILING ON EXIT] {trailing_text}")
+                    seen_sentences.add(trailing_text)
+                    save.saved_captions.append((time.time(), trailing_text))
+                    await save_txt(filename,save.saved_captions[-1])
+        
+        await save.sort_captions(filename)
         await asyncio.to_thread(deduper.cleanup_file, filename)
         
         print("[EXIT] Done!")
