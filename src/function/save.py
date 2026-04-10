@@ -69,7 +69,7 @@ async def sort_captions(filename):
         f.writelines(lines)
 
 
-async def save_txt(filename,new_caption: list[tuple[float, str]]):
+async def save_txt(filename,new_caption: tuple[float, str]):
     ''' Add new caption '''
 
     global file_handle
