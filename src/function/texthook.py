@@ -59,12 +59,20 @@ def split_into_sentences(text: str)-> list[str]:
     current=""
     
 
+    def ends_sentence(pattern: str, current: str, lookahead: str) -> bool:
+        # Include the next character so "(?![0-9])" can see it: otherwise "3." is
+        # split off before the "14" of "3.14" arrives. Ignore matches that are
+        # only in the lookahead character itself.
+        m = re.search(pattern, current + lookahead)
+        return m is not None and m.end() <= len(current)
+
     while i < len(text):
         current += text[i]
+        lookahead = text[i + 1:i + 2]
         is_chinese = bool(re.search(r'[\u4e00-\u9fff]', current))
         # -- for Chinese, split by punctuation --
         if is_chinese:
-            if re.search(chinese_punctuation, current):
+            if ends_sentence(chinese_punctuation, current, lookahead):
                 sentence = current.strip()
                 for k, v in placeholders.items():
                     sentence = sentence.replace(k, v)
@@ -73,7 +81,7 @@ def split_into_sentences(text: str)-> list[str]:
                 current = ""      
         else:
             # -- for non-Chinese, split by punctuation --
-            if re.search(general_punctuation, current):
+            if ends_sentence(general_punctuation, current, lookahead):
                 sentence = current.strip()
                 for k, v in placeholders.items():
                     sentence = sentence.replace(k, v)
